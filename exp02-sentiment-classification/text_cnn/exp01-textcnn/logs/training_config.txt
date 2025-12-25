@@ -1,0 +1,27 @@
+训练配置:
+========================================
+batch_size: 32
+max_length: 256
+sample_size: 1000
+embedding_dim: 300
+filter_sizes: [3, 4, 5]
+num_filters: 100
+dropout_rate: 0.5
+num_epochs: 10
+learning_rate: 0.001
+weight_decay: 0.0001
+save_dir: D:\PycharmProjects\exp02-sentiment-classificationn\exp01-textcnn\saved_models
+log_dir: D:\PycharmProjects\exp02-sentiment-classificationn\exp01-textcnn\logs
+
+训练结果:
+========================================
+最佳验证准确率: 0.8521
+测试准确率: 0.8302
+测试精确率: 0.8318
+测试召回率: 0.8302
+测试F1分数: 0.8300
+
+训练设备: cuda:0
+模型参数总数: 1,749,002
+可训练参数: 1,749,002
+训练时间: 2025-12-04 20:04:27
