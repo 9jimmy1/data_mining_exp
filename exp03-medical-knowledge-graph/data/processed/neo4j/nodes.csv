@@ -1,0 +1,8 @@
+id,type,name
+symptom_胸痛,Symptom,胸痛
+symptom_恶心,Symptom,恶心
+disease_高血压,Disease,高血压
+disease_肥胖症,Disease,肥胖症
+disease_糖尿病,Disease,糖尿病
+disease_高胆固醇,Disease,高胆固醇
+disease_心脏病,Disease,心脏病

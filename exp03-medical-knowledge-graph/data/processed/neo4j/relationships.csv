@@ -1,0 +1,11 @@
+start_id,end_id,type
+symptom_胸痛,disease_高血压,RELATED_TO
+symptom_胸痛,disease_肥胖症,RELATED_TO
+symptom_胸痛,disease_糖尿病,RELATED_TO
+symptom_胸痛,disease_高胆固醇,RELATED_TO
+symptom_胸痛,disease_心脏病,RELATED_TO
+symptom_恶心,disease_高血压,RELATED_TO
+symptom_恶心,disease_肥胖症,RELATED_TO
+symptom_恶心,disease_糖尿病,RELATED_TO
+symptom_恶心,disease_高胆固醇,RELATED_TO
+symptom_恶心,disease_心脏病,RELATED_TO
