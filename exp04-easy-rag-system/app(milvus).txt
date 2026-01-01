@@ -1,0 +1,119 @@
+import streamlit as st
+import time
+import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+os.environ['HF_HOME'] = 'D:\.cache\huggingface'
+os.environ['TRANSFORMERS_CACHE'] = 'D:\.cache\huggingface'
+os.environ['XDG_CACHE_HOME'] = 'D:\.cache\huggingface'
+
+# Import functions and config from other modules
+from config import (
+    DATA_FILE, EMBEDDING_MODEL_NAME, GENERATION_MODEL_NAME, TOP_K,
+    MAX_ARTICLES_TO_INDEX, COLLECTION_NAME, id_to_doc_map
+)
+from data_utils import load_data
+from models import load_embedding_model, load_generation_model
+# 修改导入：使用新的函数名和参数
+from milvus_utils import (
+    get_milvus_connection,      # 替代 get_milvus_client
+    setup_milvus_collection,    # 现在无需参数
+    index_data_if_needed,       # 现在只需要 data 和 embedding_model
+    search_similar_documents    # 现在返回三个值 (hit_ids, distances, retrieved_docs)
+)
+from rag_core import generate_answer
+
+# --- Streamlit UI 设置 ---
+st.set_page_config(layout="wide")
+st.title("📄 医疗 RAG 系统 (Milvus Docker)")
+st.markdown(f"使用 Milvus (Docker), `{EMBEDDING_MODEL_NAME}`, 和 `{GENERATION_MODEL_NAME}`。")
+
+# --- 初始化与缓存 ---
+# 1. 连接到 Docker 中的 Milvus 服务 (如果未缓存则初始化)
+connection_established = get_milvus_connection()
+
+if connection_established:
+    # 2. 设置/获取 Milvus 集合 (现在无需参数)
+    collection = setup_milvus_collection()  # 注意：它现在返回 collection 对象或 None
+    
+    # 3. 加载模型 (缓存)
+    embedding_model = load_embedding_model(EMBEDDING_MODEL_NAME)
+    generation_model, tokenizer = load_generation_model(GENERATION_MODEL_NAME)
+
+    # 检查所有组件是否成功加载
+    models_loaded = embedding_model and generation_model and tokenizer
+    collection_is_ready = collection is not None  # 检查集合是否成功获取/创建
+
+    if collection_is_ready and models_loaded:
+        # 加载数据 (未缓存)
+        pubmed_data = load_data(DATA_FILE)
+
+        # 如果需要则索引数据 (这会填充 id_to_doc_map)
+        # 注意：新版本 index_data_if_needed 不需要传入 client/collection
+        if pubmed_data:
+            indexing_successful = index_data_if_needed(pubmed_data, embedding_model)
+        else:
+            st.warning(f"无法从 {DATA_FILE} 加载数据。跳过索引。")
+            indexing_successful = False
+
+        st.divider()
+
+        # --- RAG 交互部分 ---
+        if not indexing_successful and not id_to_doc_map:
+            st.error("数据索引失败或不完整，且没有文档映射。RAG 功能已禁用。")
+        else:
+            query = st.text_input("请提出关于已索引医疗文章的问题:", key="query_input")
+
+            if st.button("获取答案", key="submit_button") and query:
+                start_time = time.time()
+
+                # 1. 搜索 Milvus (新函数返回三个值)
+                with st.spinner("正在搜索相关文档..."):
+                    # 注意：search_similar_documents 现在不需要 client 参数
+                    retrieved_ids, distances, retrieved_docs = search_similar_documents(query, embedding_model)
+
+                if not retrieved_ids:
+                    st.warning("在数据库中找不到相关文档。")
+                else:
+                    # 2. 检索到的文档已经由 search_similar_documents 返回 (retrieved_docs)
+                    # 不再需要从 id_to_doc_map 中二次映射
+                    st.subheader("检索到的上下文文档:")
+                    for i, doc in enumerate(retrieved_docs):
+                        # 如果距离可用则显示
+                        dist_str = f", 距离: {distances[i]:.4f}" if i < len(distances) else ""
+                        # 使用更稳定的ID显示方式
+                        doc_id_display = retrieved_ids[i] if i < len(retrieved_ids) else f"doc_{i}"
+                        with st.expander(f"文档 {i+1} (ID: {doc_id_display}{dist_str}) - {doc.get('title', '无标题')[:60]}"):
+                            st.write(f"**标题:** {doc.get('title', '')}")
+                            st.write(f"**内容:** {doc.get('abstract', '')}")
+
+                    st.divider()
+
+                    # 3. 生成答案 (retrieved_docs 可直接使用)
+                    st.subheader("生成的答案:")
+                    with st.spinner("正在根据上下文生成答案..."):
+                        answer = generate_answer(query, retrieved_docs, generation_model, tokenizer)
+                        st.write(answer)
+
+                end_time = time.time()
+                st.info(f"总耗时: {end_time - start_time:.2f} 秒")
+
+    else:
+        error_msg = "加载模型或设置 Milvus collection 失败。请检查日志和配置。"
+        if not collection_is_ready:
+            error_msg += " (集合创建失败)"
+        if not models_loaded:
+            error_msg += " (模型加载失败)"
+        st.error(error_msg)
+else:
+    st.error("连接到 Milvus 服务失败。请确保 Docker 容器正在运行 (端口 19530)。")
+
+# --- 页脚/信息侧边栏 ---
+st.sidebar.header("系统配置")
+st.sidebar.markdown(f"**向量存储:** Milvus (Docker)")
+st.sidebar.markdown(f"**连接地址:** `localhost:19530`")  # 更新显示
+st.sidebar.markdown(f"**Collection:** `{COLLECTION_NAME}`")
+st.sidebar.markdown(f"**数据文件:** `{DATA_FILE}`")
+st.sidebar.markdown(f"**嵌入模型:** `{EMBEDDING_MODEL_NAME}`")
+st.sidebar.markdown(f"**生成模型:** `{GENERATION_MODEL_NAME}`")
+st.sidebar.markdown(f"**最大索引数:** `{MAX_ARTICLES_TO_INDEX}`")
+st.sidebar.markdown(f"**检索 Top K:** `{TOP_K}`")
